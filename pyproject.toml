@@ -1,13 +1,19 @@
 [project]
 name = "ai-ca2"
 version = "0.1.0"
-description = "GPU detection test"
+description = "RL agent trained on the BipedalWalker enviornment"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "torch",
     "torchvision",
     "torchaudio",
+    "gymnasium[box2d]",
+    "stable-baselines3[extra]",
+    "sb3-contrib",
+    "tensorboard",
+    "pygame",
+    "pyyaml",
 ]
 
 [[tool.uv.index]]
