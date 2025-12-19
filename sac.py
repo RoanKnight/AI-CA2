@@ -1,9 +1,29 @@
 import os
 import yaml
 import gymnasium as gym
+from gymnasium import spaces
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback, EvalCallback
 from stable_baselines3.common.monitor import Monitor
+
+class RewardShaper(gym.RewardWrapper):
+  """Reward shaper that encourages forward movement and penalizes staying still."""
+  def __init__(self, env):
+    super().__init__(env)
+    self.prev_x = 0.0
+    self.step_penalty = -0.05
+
+  def reward(self, r):
+    current_x = self.unwrapped.hull.position.x
+    # Bonus scales with how far agent moves forward each step
+    forward_bonus = (current_x - self.prev_x) * 2.0
+    self.prev_x = current_x
+    return r + forward_bonus + self.step_penalty
+
+  def reset(self, **kwargs):
+    obs, info = self.env.reset(**kwargs)
+    self.prev_x = self.unwrapped.hull.position.x
+    return obs, info
 
 def load_config(config_path: str = "config.yaml") -> dict:
   with open(config_path, "r") as f:
@@ -11,6 +31,7 @@ def load_config(config_path: str = "config.yaml") -> dict:
 
 def make_env(env_name: str, render_mode: str = None) -> gym.Env:
   env = gym.make(env_name, render_mode=render_mode)
+  env = RewardShaper(env)
   env = Monitor(env)
   return env
 
@@ -41,12 +62,14 @@ def create_agent(env: gym.Env, config: dict) -> SAC:
 def get_callbacks(config: dict, env: gym.Env) -> list:
   os.makedirs("models", exist_ok=True)
 
+  # Save model checkpoints periodically for resuming interrupted training
   checkpoint_cb = CheckpointCallback(
       save_freq=config["save_freq"],
       save_path="models",
       name_prefix="sac_bipedal",
   )
 
+  # Checks whether to save the best model based on evaluation reward
   eval_env = make_env(config["env_name"])
   eval_cb = EvalCallback(
       eval_env,
@@ -57,6 +80,7 @@ def get_callbacks(config: dict, env: gym.Env) -> list:
       deterministic=True,
   )
 
+  # Print episode stats to console during training
   log_cb = EpisodeLogger(log_interval=config["log_interval"])
   return [checkpoint_cb, eval_cb, log_cb]
 
